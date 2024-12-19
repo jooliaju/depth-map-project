@@ -1,0 +1,6 @@
+numba==0.58.1
+numpy==1.26.1
+opencv_python==4.8.1.78
+opencv_python_headless==4.8.0.76
+PyQt5==5.15.10
+PyQt5_sip==12.13.0
