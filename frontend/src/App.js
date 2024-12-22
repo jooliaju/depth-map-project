@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Box,
   Slider,
@@ -6,24 +6,25 @@ import {
   Typography,
   Container,
   Grid2,
-  IconButton,
-  Select,
-  MenuItem,
   FormControl,
   InputLabel,
+  Select,
+  MenuItem,
+  Stack,
 } from "@mui/material";
 import UploadIcon from "@mui/icons-material/Upload";
+import ImageIcon from "@mui/icons-material/Image";
 import AnnotationCanvas from "./components/AnnotationCanvas";
+import { uploadImage, saveAnnotations, processDepth } from "./services/api";
 
 function App() {
   const [brushSize, setBrushSize] = useState(5);
   const [brushColor, setBrushColor] = useState("#000000");
   const [isIgnoreMode, setIsIgnoreMode] = useState(false);
   const [depthValue, setDepthValue] = useState(25);
-
-  // New state for images
   const [images, setImages] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
+  const canvasRef = useRef(null);
 
   const handleBrushSizeChange = (event, newValue) => {
     setBrushSize(newValue);
@@ -40,35 +41,67 @@ function App() {
     setBrushColor(isIgnoreMode ? "#000000" : "#00FF00");
   };
 
-  const handleSave = () => {
-    console.log("Saving annotation...");
-  };
-
-  // New function to handle image uploads
-  const handleImageUpload = (event) => {
+  const handleImageUpload = async (event) => {
     const files = Array.from(event.target.files);
 
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImages((prevImages) => [
-          ...prevImages,
-          {
-            id: Date.now(),
-            name: file.name,
-            url: e.target.result,
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
-    });
+    try {
+      for (const file of files) {
+        const uploadResponse = await uploadImage(file);
+
+        if (uploadResponse.status === "success") {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            setImages((prevImages) => [
+              ...prevImages,
+              {
+                id: Date.now(),
+                name: file.name,
+                url: e.target.result,
+                uploadedName: uploadResponse.filename,
+              },
+            ]);
+          };
+          reader.readAsDataURL(file);
+        } else {
+          console.error("Failed to upload image:", uploadResponse.message);
+        }
+      }
+    } catch (error) {
+      console.error("Error uploading images:", error);
+    }
   };
 
-  // New function to handle image selection
   const handleImageSelect = (event) => {
     const selectedId = event.target.value;
     const selected = images.find((img) => img.id === selectedId);
     setSelectedImage(selected);
+  };
+
+  const handleProcessImage = () => {
+    if (!selectedImage) return;
+
+    console.log("Processing image:", selectedImage.name);
+  };
+
+  const handleSave = async () => {
+    if (!selectedImage || !canvasRef.current) return;
+
+    try {
+      // Get both canvas data
+      const { withScribbles, annotations } = canvasRef.current.saveCanvases();
+
+      const imageName =
+        selectedImage.uploadedName || selectedImage.name.replace(".png", "");
+
+      // Send both images to backend
+      await saveAnnotations(
+        imageName,
+        annotations, // White canvas with scribbles (for _annotations.png)
+        withScribbles // Image canvas with scribbles (for _with_scribbles.png)
+      );
+    } catch (error) {
+      console.error("Error saving annotations:", error);
+    }
   };
 
   return (
@@ -79,22 +112,9 @@ function App() {
 
       <Grid2 container spacing={2}>
         <Grid2 item xs={9}>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 2,
-              mb: 2,
-            }}
-          >
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 2 }}>
             {/* Image upload and selection controls */}
-            <Box
-              sx={{
-                display: "flex",
-                gap: 2,
-                alignItems: "center",
-              }}
-            >
+            <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
               <Button
                 component="label"
                 variant="contained"
@@ -128,6 +148,7 @@ function App() {
 
             {/* Canvas */}
             <AnnotationCanvas
+              ref={canvasRef}
               brushSize={brushSize}
               brushColor={brushColor}
               isIgnoreMode={isIgnoreMode}
@@ -165,21 +186,34 @@ function App() {
               sx={{ height: 200 }}
             />
 
-            <Button
-              variant="contained"
-              onClick={toggleIgnoreMode}
-              color={isIgnoreMode ? "success" : "primary"}
-            >
-              {isIgnoreMode ? "Set Annotation Pen" : "Set Ignore Pen"}
-            </Button>
+            <Stack spacing={2}>
+              <Button
+                variant="contained"
+                onClick={toggleIgnoreMode}
+                color={isIgnoreMode ? "success" : "primary"}
+              >
+                {isIgnoreMode ? "Set Annotation Pen" : "Set Ignore Pen"}
+              </Button>
 
-            <Button
-              variant="contained"
-              onClick={handleSave}
-              disabled={!selectedImage}
-            >
-              Save Image
-            </Button>
+              <Button
+                variant="contained"
+                onClick={handleSave}
+                disabled={!selectedImage}
+                color="primary"
+              >
+                Save Annotations
+              </Button>
+
+              <Button
+                variant="contained"
+                onClick={handleProcessImage}
+                disabled={!selectedImage}
+                startIcon={<ImageIcon />}
+                color="secondary"
+              >
+                Process Image
+              </Button>
+            </Stack>
           </Box>
         </Grid2>
       </Grid2>

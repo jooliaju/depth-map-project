@@ -1,142 +1,193 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, {
+  useRef,
+  useEffect,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { Box } from "@mui/material";
 
-const AnnotationCanvas = ({
-  width = 800, // Increased default size
-  height = 600,
-  brushSize,
-  brushColor,
-  isIgnoreMode,
-  selectedImage,
-}) => {
-  const canvasRef = useRef(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [lastPoint, setLastPoint] = useState(null);
-  const [imageData, setImageData] = useState(null); // Store the image data
+const AnnotationCanvas = forwardRef(
+  (
+    {
+      width = 800,
+      height = 600,
+      brushSize,
+      brushColor,
+      isIgnoreMode,
+      selectedImage,
+    },
+    ref
+  ) => {
+    const imageCanvasRef = useRef(null); // For image + scribbles
+    const whiteCanvasRef = useRef(null); // For white background + scribbles
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [lastPoint, setLastPoint] = useState(null);
 
-  // Effect to handle image changes and initial load
-  useEffect(() => {
-    if (!selectedImage) return;
+    // Initialize canvases when image is selected
+    useEffect(() => {
+      if (!selectedImage || !imageCanvasRef.current || !whiteCanvasRef.current)
+        return;
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+      const imageCanvas = imageCanvasRef.current;
+      const whiteCanvas = whiteCanvasRef.current;
+      const imageCtx = imageCanvas.getContext("2d");
+      const whiteCtx = whiteCanvas.getContext("2d");
 
-    const image = new Image();
-    image.src = selectedImage.url;
+      const image = new Image();
+      image.src = selectedImage.url;
 
-    image.onload = () => {
-      // Clear the canvas
-      ctx.clearRect(0, 0, width, height);
+      image.onload = () => {
+        // Set both canvases to image size
+        imageCanvas.width = image.width;
+        imageCanvas.height = image.height;
+        whiteCanvas.width = image.width;
+        whiteCanvas.height = image.height;
 
-      // Calculate aspect ratio to maintain image proportions
-      const aspectRatio = image.width / image.height;
-      let drawWidth = width;
-      let drawHeight = height;
+        // IMPORTANT: Make sure white canvas is completely white first
+        whiteCtx.fillStyle = "#FFFFFF";
+        whiteCtx.fillRect(0, 0, whiteCanvas.width, whiteCanvas.height);
 
-      if (aspectRatio > 1) {
-        // Landscape image
-        drawHeight = width / aspectRatio;
-      } else {
-        // Portrait image
-        drawWidth = height * aspectRatio;
-      }
+        // Only draw image on the image canvas
+        imageCtx.drawImage(image, 0, 0);
 
-      // Center the image
-      const x = (width - drawWidth) / 2;
-      const y = (height - drawHeight) / 2;
+        // Debug - check what's being sent
+        console.log("White canvas data:", whiteCanvas.toDataURL());
+      };
+    }, [selectedImage]);
 
-      // Draw the image
-      ctx.drawImage(image, x, y, drawWidth, drawHeight);
+    // Save canvases for backend processing
+    useImperativeHandle(
+      ref,
+      () => ({
+        saveCanvases: () => {
+          if (!whiteCanvasRef.current || !imageCanvasRef.current) {
+            console.error("Canvas refs are null");
+            return null;
+          }
 
-      // Store the current canvas state
-      setImageData(ctx.getImageData(0, 0, width, height));
+          return {
+            withScribbles: imageCanvasRef.current.toDataURL("image/png"),
+            annotations: whiteCanvasRef.current.toDataURL("image/png"),
+          };
+        },
+      }),
+      []
+    );
+
+    const draw = (e) => {
+      if (!isDrawing) return;
+
+      const imageCanvas = imageCanvasRef.current;
+      const whiteCanvas = whiteCanvasRef.current;
+      const rect = imageCanvas.getBoundingClientRect();
+
+      const scaleX = imageCanvas.width / rect.width;
+      const scaleY = imageCanvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+
+      // Draw on both canvases simultaneously
+      const canvases = [
+        { canvas: imageCanvas, ctx: imageCanvas.getContext("2d") },
+        { canvas: whiteCanvas, ctx: whiteCanvas.getContext("2d") },
+      ];
+
+      canvases.forEach(({ ctx }) => {
+        ctx.beginPath();
+        ctx.strokeStyle = brushColor;
+        ctx.lineWidth = brushSize;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        if (lastPoint) {
+          ctx.moveTo(lastPoint.x, lastPoint.y);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+        }
+      });
+
+      setLastPoint({ x, y });
     };
-  }, [selectedImage, width, height]);
 
-  // Restore the image state before each draw operation
-  const restoreImageState = () => {
-    if (imageData) {
-      const ctx = canvasRef.current.getContext("2d");
-      ctx.putImageData(imageData, 0, 0);
-    }
-  };
+    const startDrawing = (e) => {
+      setIsDrawing(true);
+      const rect = imageCanvasRef.current.getBoundingClientRect();
+      const scaleX = imageCanvasRef.current.width / rect.width;
+      const scaleY = imageCanvasRef.current.height / rect.height;
 
-  const startDrawing = (e) => {
-    if (!selectedImage) return; // Prevent drawing if no image is selected
+      setLastPoint({
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY,
+      });
+    };
 
-    const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = width / rect.width; // relationship bitmap vs. element for X
-    const scaleY = height / rect.height; // relationship bitmap vs. element for Y
-
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
-    setIsDrawing(true);
-    setLastPoint({ x, y });
-  };
-
-  const draw = (e) => {
-    if (!isDrawing || !selectedImage) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = width / rect.width;
-    const scaleY = height / rect.height;
-
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
-    ctx.beginPath();
-    ctx.moveTo(lastPoint.x, lastPoint.y);
-    ctx.lineTo(x, y);
-    ctx.strokeStyle = brushColor;
-    ctx.lineWidth = brushSize;
-    ctx.lineCap = "round";
-    ctx.stroke();
-
-    setLastPoint({ x, y });
-  };
-
-  const stopDrawing = () => {
-    if (isDrawing) {
+    const stopDrawing = () => {
       setIsDrawing(false);
-      // Store the new canvas state after drawing
-      const ctx = canvasRef.current.getContext("2d");
-      setImageData(ctx.getImageData(0, 0, width, height));
-    }
-  };
+      setLastPoint(null);
+    };
 
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        bgcolor: "#f5f5f5",
-        border: "1px solid #ddd",
-        borderRadius: 1,
-        overflow: "hidden",
-        width: "100%",
-        height: "600px", // Fixed height container
-      }}
-    >
-      <canvas
-        ref={canvasRef}
-        width={width}
-        height={height}
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={stopDrawing}
-        onMouseOut={stopDrawing}
-        style={{
-          maxWidth: "100%",
-          maxHeight: "100%",
-          objectFit: "contain",
+    return (
+      <Box
+        sx={{
+          position: "relative",
+          width: "100%",
+          height: "600px",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#f0f0f0",
+          border: "2px dashed #ccc",
+          borderRadius: "8px",
+          overflow: "hidden",
         }}
-      />
-    </Box>
-  );
-};
+      >
+        {!selectedImage ? (
+          <Box
+            sx={{
+              color: "#666",
+              fontSize: "1.2rem",
+              textAlign: "center",
+              padding: "20px",
+            }}
+          >
+            Select an image to begin annotation
+          </Box>
+        ) : (
+          <Box sx={{ position: "relative" }}>
+            {/* White canvas - hidden but active */}
+            <canvas
+              ref={whiteCanvasRef}
+              width={selectedImage ? selectedImage.width : width}
+              height={selectedImage ? selectedImage.height : height}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                visibility: "hidden", // Hide but keep active
+              }}
+            />
+
+            {/* Image canvas - visible */}
+            <canvas
+              ref={imageCanvasRef}
+              onMouseDown={startDrawing}
+              onMouseMove={draw}
+              onMouseUp={stopDrawing}
+              onMouseOut={stopDrawing}
+              width={selectedImage ? selectedImage.width : width}
+              height={selectedImage ? selectedImage.height : height}
+              style={{
+                maxWidth: "100%",
+                maxHeight: "100%",
+                objectFit: "contain",
+              }}
+            />
+          </Box>
+        )}
+      </Box>
+    );
+  }
+);
 
 export default AnnotationCanvas;
