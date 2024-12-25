@@ -5,6 +5,7 @@ import numpy as np
 import os
 from werkzeug.utils import secure_filename
 from scribble_process import create_masks_and_annotations, save_annotation_outputs
+from anisotropic import test_anisotropic
 
 app = Flask(__name__)
 # Configure CORS
@@ -86,6 +87,29 @@ def save_annotations():
         
     except Exception as e:
         print(f"Error in save_annotations: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/process-anisotropic', methods=['POST'])
+def process_anisotropic():
+    try:
+        data = request.json
+        image_name = data['imageName']
+        beta = data.get('beta', 0.1)  # Default value if not provided
+        iterations = data.get('iterations', 3000)  # Default value if not provided
+        
+        # Process using test_anisotropic
+        test_anisotropic(image_name, beta, iterations)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Anisotropic diffusion completed'
+        })
+        
+    except Exception as e:
+        print(f"Error in process_anisotropic: {str(e)}")
         return jsonify({
             'status': 'error',
             'message': str(e)

@@ -83,3 +83,30 @@ export const processFocus = async (imageName, focusPoint, options = {}) => {
   });
   return response.json();
 };
+
+export const processAnisotropic = async (imageName, options = {}) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/process-anisotropic`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        imageName,
+        beta: options.beta || 0.1,
+        iterations: options.iterations || 3000,
+      }),
+      mode: "cors",
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error("Error processing anisotropic:", error);
+    throw error;
+  }
+};

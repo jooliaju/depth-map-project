@@ -15,7 +15,12 @@ import {
 import UploadIcon from "@mui/icons-material/Upload";
 import ImageIcon from "@mui/icons-material/Image";
 import AnnotationCanvas from "./components/AnnotationCanvas";
-import { uploadImage, saveAnnotations, processDepth } from "./services/api";
+import {
+  uploadImage,
+  saveAnnotations,
+  processDepth,
+  processAnisotropic,
+} from "./services/api";
 
 function App() {
   const [brushSize, setBrushSize] = useState(5);
@@ -77,12 +82,6 @@ function App() {
     setSelectedImage(selected);
   };
 
-  const handleProcessImage = () => {
-    if (!selectedImage) return;
-
-    console.log("Processing image:", selectedImage.name);
-  };
-
   const handleSave = async () => {
     if (!selectedImage || !canvasRef.current) return;
 
@@ -101,6 +100,24 @@ function App() {
       );
     } catch (error) {
       console.error("Error saving annotations:", error);
+    }
+  };
+
+  const handleProcessAnisotropic = async () => {
+    if (!selectedImage) return;
+
+    try {
+      const imageName =
+        selectedImage.uploadedName || selectedImage.name.replace(".png", "");
+
+      console.log("Processing anisotropic diffusion...");
+      await processAnisotropic(imageName, {
+        beta: 0.1,
+        iterations: 3000,
+      });
+      console.log("Anisotropic diffusion completed");
+    } catch (error) {
+      console.error("Error processing anisotropic:", error);
     }
   };
 
@@ -203,15 +220,13 @@ function App() {
               >
                 Save Annotations
               </Button>
-
               <Button
                 variant="contained"
-                onClick={handleProcessImage}
+                onClick={handleProcessAnisotropic}
                 disabled={!selectedImage}
-                startIcon={<ImageIcon />}
                 color="secondary"
               >
-                Process Image
+                Process Anisotropic
               </Button>
             </Stack>
           </Box>

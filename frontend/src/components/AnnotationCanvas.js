@@ -24,6 +24,8 @@ const AnnotationCanvas = forwardRef(
     const [isDrawing, setIsDrawing] = useState(false);
     const [lastPoint, setLastPoint] = useState(null);
 
+    const { abs, sign } = Math;
+
     // Initialize canvases when image is selected
     useEffect(() => {
       if (!selectedImage || !imageCanvasRef.current || !whiteCanvasRef.current)
@@ -75,6 +77,47 @@ const AnnotationCanvas = forwardRef(
       []
     );
 
+    // Simplified Bresenham's line algorithm
+    const drawLine = (ctx, x0, y0, x1, y1) => {
+      // Round coordinates to integers
+      x0 = Math.round(x0);
+      y0 = Math.round(y0);
+      x1 = Math.round(x1);
+      y1 = Math.round(y1);
+
+      const dx = abs(x1 - x0);
+      const dy = abs(y1 - y0);
+      const sx = sign(x1 - x0);
+      const sy = sign(y1 - y0);
+      let err = dx - dy;
+
+      const drawPixel = (x, y) => {
+        // Draw a square of size brushSize x brushSize centered at (x,y)
+        ctx.fillRect(
+          x - Math.floor(brushSize / 2),
+          y - Math.floor(brushSize / 2),
+          brushSize,
+          brushSize
+        );
+      };
+
+      while (true) {
+        drawPixel(x0, y0);
+
+        if (x0 === x1 && y0 === y1) break;
+
+        const e2 = 2 * err;
+        if (e2 > -dy) {
+          err -= dy;
+          x0 += sx;
+        }
+        if (e2 < dx) {
+          err += dx;
+          y0 += sy;
+        }
+      }
+    };
+
     const draw = (e) => {
       if (!isDrawing) return;
 
@@ -87,23 +130,23 @@ const AnnotationCanvas = forwardRef(
       const x = (e.clientX - rect.left) * scaleX;
       const y = (e.clientY - rect.top) * scaleY;
 
-      // Draw on both canvases simultaneously
-      const canvases = [
-        { canvas: imageCanvas, ctx: imageCanvas.getContext("2d") },
-        { canvas: whiteCanvas, ctx: whiteCanvas.getContext("2d") },
-      ];
-
-      canvases.forEach(({ ctx }) => {
-        ctx.beginPath();
-        ctx.strokeStyle = brushColor;
-        ctx.lineWidth = brushSize;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
+      // Draw on both canvases
+      [imageCanvas, whiteCanvas].forEach((canvas) => {
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = brushColor;
 
         if (lastPoint) {
-          ctx.moveTo(lastPoint.x, lastPoint.y);
-          ctx.lineTo(x, y);
-          ctx.stroke();
+          // Draw line from last point to current point
+          drawLine(ctx, lastPoint.x, lastPoint.y, x, y);
+        } else {
+          // Single point
+          ctx.fillRect(
+            x - Math.floor(brushSize / 2),
+            y - Math.floor(brushSize / 2),
+            brushSize,
+            brushSize
+          );
         }
       });
 
