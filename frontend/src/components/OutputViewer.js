@@ -25,13 +25,21 @@ const OutputViewer = React.forwardRef(({ selectedImage }, ref) => {
 
   // Function to add new images to the state
   const addImages = (category, newImages) => {
+    if (!newImages) {
+      console.warn("No images provided to addImages");
+      return;
+    }
+
     setImages((prev) => ({
       ...prev,
-      [category]: Object.entries(newImages).map(([key, imageData]) => ({
-        src: imageData.src,
-        title: imageData.title,
-      })),
+      [category]: Object.entries(newImages)
+        .map(([key, imageData]) => ({
+          src: imageData.src || "",
+          title: imageData.title || key,
+        }))
+        .filter((img) => img.src), // Filter out any entries without src
     }));
+
     // Switch to the appropriate tab
     switch (category) {
       case "annotations":
@@ -51,6 +59,7 @@ const OutputViewer = React.forwardRef(({ selectedImage }, ref) => {
   // Expose addImages method via ref
   React.useImperativeHandle(ref, () => ({
     addImages,
+    getImages: (category) => images[category] || [],
   }));
 
   // Add back the handleTabChange function
@@ -59,8 +68,12 @@ const OutputViewer = React.forwardRef(({ selectedImage }, ref) => {
   };
 
   const renderImages = (type) => {
+    if (!images[type] || images[type].length === 0) {
+      return <Typography>No images to display</Typography>;
+    }
+
     return images[type].map((img, index) => (
-      <Box key={index} sx={{ maxWidth: "300px" }}>
+      <Box key={index} sx={{ maxWidth: "300px", margin: "10px" }}>
         <Typography variant="subtitle2" gutterBottom>
           {img.title}
         </Typography>
@@ -71,6 +84,8 @@ const OutputViewer = React.forwardRef(({ selectedImage }, ref) => {
             width: "100%",
             height: "auto",
             objectFit: "contain",
+            border: "1px solid #ccc",
+            borderRadius: "4px",
           }}
         />
       </Box>

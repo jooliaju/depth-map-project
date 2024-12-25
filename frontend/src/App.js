@@ -97,14 +97,13 @@ function App() {
 
     try {
       const { withScribbles, annotations } = canvasRef.current.saveCanvases();
-      const imageName =
-        selectedImage.uploadedName || selectedImage.name.replace(".png", "");
 
       const result = await saveAnnotations(
-        imageName,
+        selectedImage.url,
         annotations,
         withScribbles
       );
+
       if (result.status === "success") {
         outputViewerRef.current?.addImages("annotations", result.images);
       }
@@ -114,19 +113,44 @@ function App() {
   };
 
   const handleProcessAnisotropic = async () => {
-    if (!selectedImage) return;
+    if (!selectedImage || !outputViewerRef.current) return;
 
     try {
       setIsProcessing(true);
       setAnisotropicProgress(0);
-      const imageName =
-        selectedImage.uploadedName || selectedImage.name.replace(".png", "");
+
+      // Get the latest annotation images
+      const annotationImages = outputViewerRef.current.getImages("annotations");
+      if (!annotationImages || annotationImages.length === 0) {
+        throw new Error(
+          "No annotation images found. Please save annotations first."
+        );
+      }
+
+      // Find the required images
+      const withScribbles = annotationImages.find(
+        (img) => img.title === "With Scribbles"
+      )?.src;
+      const annotations = annotationImages.find(
+        (img) => img.title === "Input Annotations"
+      )?.src;
+      const mask = annotationImages.find((img) => img.title === "Mask")?.src;
+      const ignoreMask = annotationImages.find(
+        (img) => img.title === "Ignore Mask"
+      )?.src;
+
+      if (!withScribbles || !annotations || !mask || !ignoreMask) {
+        throw new Error("Missing required annotation images");
+      }
 
       const result = await processAnisotropic(
-        imageName,
+        selectedImage.url, // Original image
         {
           beta: 0.1,
           iterations: 3000,
+          annotations,
+          mask,
+          ignoreMask,
         },
         (progress) => {
           setAnisotropicProgress(progress);
@@ -144,10 +168,26 @@ function App() {
   };
 
   const handleProcessFocus = async () => {
-    if (!selectedImage) return;
+    if (!selectedImage || !outputViewerRef.current) return;
+
     try {
-      const imageName =
-        selectedImage.uploadedName || selectedImage.name.replace(".png", "");
+      // Get the anisotropic result image
+      const anisotropicImages =
+        outputViewerRef.current.getImages("anisotropic");
+      if (!anisotropicImages || anisotropicImages.length === 0) {
+        throw new Error(
+          "No anisotropic result found. Please process anisotropic first."
+        );
+      }
+
+      const anisotropicResult = anisotropicImages.find(
+        (img) => img.title === "Anisotropic Diffusion"
+      )?.src;
+
+      if (!anisotropicResult) {
+        throw new Error("Anisotropic result not found");
+      }
+
       setShowFocusSelector(true);
     } catch (error) {
       console.error("Error starting focus process:", error);
@@ -157,16 +197,30 @@ function App() {
   const handleFocusPointSelect = async (point) => {
     setFocusPoint(point);
     try {
-      const imageName =
-        selectedImage.uploadedName || selectedImage.name.replace(".png", "");
-      const result = await processFocus(imageName, point, {
-        depthRange: 0.1,
-        kernelSizeGaus: 5,
-        kernelSizeBf: 5,
-        sigmaColor: 200,
-        sigmaSpace: 200,
-        gausSigma: 60,
-      });
+      // Get the anisotropic result image
+      const anisotropicImages =
+        outputViewerRef.current.getImages("anisotropic");
+      const anisotropicResult = anisotropicImages.find(
+        (img) => img.title === "Anisotropic Diffusion"
+      )?.src;
+
+      if (!anisotropicResult) {
+        throw new Error("Anisotropic result not found");
+      }
+
+      const result = await processFocus(
+        selectedImage.url, // Original image
+        anisotropicResult, // Anisotropic result
+        point, // Focus point
+        {
+          depthRange: 0.1,
+          kernelSizeGaus: 5,
+          kernelSizeBf: 5,
+          sigmaColor: 200,
+          sigmaSpace: 200,
+          gausSigma: 60,
+        }
+      );
 
       if (result.status === "success") {
         outputViewerRef.current?.addImages("focus", result.images);

@@ -24,7 +24,7 @@ export const uploadImage = async (file) => {
 };
 
 export const saveAnnotations = async (
-  imageName,
+  imageData,
   annotations,
   withScribbles
 ) => {
@@ -33,7 +33,11 @@ export const saveAnnotations = async (
     const response = await fetch(`${API_BASE_URL}/save-annotations`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageName, annotations, withScribbles }),
+      body: JSON.stringify({
+        imageData,
+        annotations,
+        withScribbles,
+      }),
     });
 
     const data = await response.json();
@@ -63,21 +67,29 @@ export const processDepth = async (imageName, options = {}) => {
   return response.json();
 };
 
-export const processFocus = async (imageName, focusPoint, options = {}) => {
+export const processFocus = async (
+  imageData,
+  anisotropicResult,
+  focusPoint,
+  options = {}
+) => {
   try {
-    const formData = new FormData();
-    formData.append("imageName", imageName);
-    formData.append("focusPoint", JSON.stringify(focusPoint));
-    formData.append("depthRange", options.depthRange || 0.1);
-    formData.append("kernelSizeGaus", options.kernelSizeGaus || 5);
-    formData.append("kernelSizeBf", options.kernelSizeBf || 5);
-    formData.append("sigmaColor", options.sigmaColor || 200);
-    formData.append("sigmaSpace", options.sigmaSpace || 200);
-    formData.append("gausSigma", options.gausSigma || 60);
-
     const response = await fetch(`${API_BASE_URL}/process-focus`, {
       method: "POST",
-      body: formData,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        imageData,
+        anisotropicResult,
+        focusPoint,
+        depthRange: options.depthRange || 0.1,
+        kernelSizeGaus: options.kernelSizeGaus || 5,
+        kernelSizeBf: options.kernelSizeBf || 5,
+        sigmaColor: options.sigmaColor || 200,
+        sigmaSpace: options.sigmaSpace || 200,
+        gausSigma: options.gausSigma || 60,
+      }),
     });
 
     if (!response.ok) {
@@ -92,7 +104,7 @@ export const processFocus = async (imageName, focusPoint, options = {}) => {
 };
 
 export const processAnisotropic = async (
-  imageName,
+  imageData,
   options = {},
   onProgress
 ) => {
@@ -103,7 +115,10 @@ export const processAnisotropic = async (
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        imageName,
+        imageData,
+        annotations: options.annotations,
+        mask: options.mask,
+        ignoreMask: options.ignoreMask,
         beta: options.beta || 0.1,
         iterations: options.iterations || 3000,
       }),

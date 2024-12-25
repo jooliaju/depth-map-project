@@ -3,13 +3,6 @@ import cv2
 from numba import jit
 from helper import *
 
-focus_point = None
-focus_set = False
-rgb_copy = None
-
-# Loop over each pixel and blend the original and the filtered images based on the gradient mask
-
-
 @jit(nopython=True)
 def blend_images(rgb_image, bf_img, gradient_mask):
     """
@@ -29,81 +22,67 @@ def blend_images(rgb_image, bf_img, gradient_mask):
 
     return depth_based_blurred_image
 
-# defines the click event
-
-
-def click_event(event, x, y, flags, param):
-    global focus_point, focus_set, rgb_copy
-
-    if event == cv2.EVENT_LBUTTONDOWN:
-        # Draw a circle around the point the user clicked
-        cv2.circle(rgb_copy, (x, y), 10, (0, 255, 0), 2)
-
-        # Update the display with the circle
-        cv2.imshow("Select Focus", rgb_copy)
-
-        # Set the flag indicating that the focus has been set
-        focus_set = True
-
-        focus_point = (x, y)
-        print("Focus set to: ", focus_point)
-
-
-def test_focus(input, depth_range, kernel_size_gaus, kernel_size_bf, sigma_color, sigma_space, gaus_sigma, focus_point=None):
+def test_focus(rgb_img, depth_map, focus_point, depth_range=0.1, kernel_size_gaus=5, 
+               kernel_size_bf=5, sigma_color=200, sigma_space=200, gaus_sigma=60):
     """
-    This function processes the focus effect using a provided focus point
+    Process the focus effect using provided image data
     """
-    print("Starting focus algorithm with provided focus point:", focus_point)
+    try:
+        # Get image dimensions
+        height, width = rgb_img.shape[:2]
+        
+        # print("RGB Image shape: ", rgb_img.shape)
+        # print("Depth map shape: ", depth_map.shape)
+        
+        # Convert normalized coordinates (0-1) to image coordinates
+        focus_x = int(round(focus_point['x'] * width))
+        focus_y = int(round(focus_point['y'] * height))
+        
+        # print('Using focus point:', (focus_x, focus_y))
 
-    # Read the image and depth map
-    rgb_img = cv2.imread(f"./images/{input}.png")
-    
-    # Convert focus point coordinates to integers
-    focus_x = int(round(focus_point['x']))
-    focus_y = int(round(focus_point['y']))
-    
-    print('Using focus point:', (focus_x, focus_y))
+        # Create a mask with depth map
+        norm_depth_map = cv2.normalize(
+            depth_map, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        # print("Normalized depth map shape: ", norm_depth_map.shape)
 
-    # Create a mask with depth map
-    depth_map = cv2.imread(f"./outputs/{input}_anisotropic.png")
-    norm_depth_map = cv2.normalize(
-        depth_map, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-    
-    # Save normalized depth map
-    cv2.imwrite(f"./focus_outputs/{input}_depth_norm.png",
-                norm_depth_map*255)
+        # Setting the focal point and depth range
+        focal_depth_value = norm_depth_map[focus_y, focus_x]
+        
+        # Create the new mask based on the depth range
+        in_focus = (norm_depth_map >= (focal_depth_value - depth_range)) & \
+            (norm_depth_map <= (focal_depth_value + depth_range))
+        # print("In focus mask shape: ", in_focus.shape)
 
-    # Setting the focal point and depth range
-    focal_depth_value = norm_depth_map[focus_y, focus_x]
-    
-    # Create the new mask based on the depth range
-    in_focus = (norm_depth_map >= (focal_depth_value - depth_range)) & \
-        (norm_depth_map <= (focal_depth_value + depth_range))
+        # Create depth mask (single channel)
+        depth_mask = (in_focus * 255).astype(np.uint8)
+        # print("Depth mask shape: ", depth_mask.shape)
 
-    # Save the initial mask
-    cv2.imwrite(f"./focus_outputs/{input}_mask.png",
-                in_focus*255)
+        # Apply gaussian filter to create gradient mask
+        gradient_mask = gaussian_filter(depth_mask, kernel_size_gaus, gaus_sigma)
+        # print("After gaussian filter shape: ", gradient_mask.shape)
+        
+        gradient_mask = cv2.cvtColor(gradient_mask, cv2.COLOR_BGR2GRAY)/255
+        # print("After grayscale conversion shape: ", gradient_mask.shape)
 
-    depth_mask = cv2.imread(
-        f"./focus_outputs/{input}_mask.png", cv2.IMREAD_GRAYSCALE)
-    # Reshape depth mask to be 3 channels
-    depth_mask = np.repeat(depth_mask[:, :, np.newaxis], 3, axis=2)
+        # Apply bilateral filter
+        bf_img = bilateral_filter(rgb_img, kernel_size_bf,
+                                sigma_color, sigma_space)
+        # print("Bilateral filter output shape: ", bf_img.shape)
 
-    gradient_mask = gaussian_filter(depth_mask, kernel_size_gaus, gaus_sigma)
-    # Save gradient mask
-    cv2.imwrite(f"./focus_outputs/{input}_mask_blur.png", gradient_mask)
+        # Create final blended image
+        blended_img = blend_images(rgb_img, bf_img, gradient_mask)
+        # print("Final blended image shape: ", blended_img.shape)
 
-    bf_img = bilateral_filter(rgb_img, kernel_size_bf,
-                            sigma_color, sigma_space)
-    cv2.imwrite(f"./focus_outputs/{input}_bf.png", bf_img)
+        # Return all processed images
+        result = {
+            'depth_norm': (norm_depth_map * 255).astype(np.uint8), # normalizing the depth map
+            'mask': depth_mask,
+            'bf': bf_img,
+            'blended': blended_img
+        }
+            
+        return result
 
-    # Turn gradient mask to single channel
-    gradient_mask = cv2.cvtColor(gradient_mask, cv2.COLOR_BGR2GRAY)/255
-
-    # Save gradient mask
-    cv2.imwrite(f"./focus_outputs/{input}_mask_blur.png", gradient_mask)
-
-    blended_img = blend_images(rgb_img, bf_img, gradient_mask)
-
-    # Save blended image
-    cv2.imwrite(f"./focus_outputs/{input}_blended.png", blended_img)
+    except Exception as e:
+        print(f"Error in test_focus: {str(e)}")
+        raise e
