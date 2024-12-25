@@ -2,6 +2,7 @@ import numpy as np
 from numba import jit
 import cv2
 from poisson import compute_poisson
+import os
 
 
 @jit(nopython=True)  # Set "nopython" mode for best performance, equivalent to @njit
@@ -105,14 +106,19 @@ def test_diffusion(rgb_img, scribbles, mask, ignore_mask, beta, iterations):
 
 def test_anisotropic(image_name, beta=0.1, iterations=3000, stream_progress=False):
     try:
-        # Load image and masks
-        rgb_img = cv2.imread(f'uploads/{image_name}.png')
+        # Load image and masks using absolute paths
+        BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        UPLOAD_FOLDER = os.path.join(BACKEND_DIR, 'uploads')
+        OUTPUT_FOLDER = os.path.join(BACKEND_DIR, 'outputs')
+
+        # Load image and masks with correct paths
+        rgb_img = cv2.imread(os.path.join(UPLOAD_FOLDER, f'{image_name}.png'))
         if rgb_img is None:
-            raise Exception("Could not load image")
+            raise Exception(f"Could not load image from {os.path.join(UPLOAD_FOLDER, f'{image_name}.png')}")
             
-        scribbles = cv2.imread(f'outputs/{image_name}_annotations.png', cv2.IMREAD_GRAYSCALE)
-        mask = cv2.imread(f'outputs/{image_name}_mask.png', cv2.IMREAD_GRAYSCALE)
-        ignore_mask = cv2.imread(f'outputs/{image_name}_ignore_mask.png', cv2.IMREAD_GRAYSCALE)
+        scribbles = cv2.imread(os.path.join(OUTPUT_FOLDER, f'{image_name}_annotations.png'), cv2.IMREAD_GRAYSCALE)
+        mask = cv2.imread(os.path.join(OUTPUT_FOLDER, f'{image_name}_mask.png'), cv2.IMREAD_GRAYSCALE)
+        ignore_mask = cv2.imread(os.path.join(OUTPUT_FOLDER, f'{image_name}_ignore_mask.png'), cv2.IMREAD_GRAYSCALE)
         
         # Initialize arrays if files don't exist
         if scribbles is None:
@@ -123,13 +129,13 @@ def test_anisotropic(image_name, beta=0.1, iterations=3000, stream_progress=Fals
             ignore_mask = np.zeros((rgb_img.shape[0], rgb_img.shape[1]), dtype=np.uint8)
 
         # Process the image
-        result = test_diffusion(rgb_img, scribbles, mask, ignore_mask, beta, iterations)
-        
-        # Save the result
-        cv2.imwrite(f'outputs/{image_name}_anisotropic.png', result)
-        
-        if stream_progress:
-            yield 100
+        for progress, result in test_diffusion(rgb_img, scribbles, mask, ignore_mask, beta, iterations):
+            if result is not None:
+                # Save the final result
+                output_path = os.path.join(OUTPUT_FOLDER, f'{image_name}_anisotropic.png')
+                cv2.imwrite(output_path, result)
+            if stream_progress:
+                yield progress
             
     except Exception as e:
         print(f"Error in test_anisotropic: {str(e)}")
