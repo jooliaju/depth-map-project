@@ -227,7 +227,7 @@ def serve_focus_output(filename):
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    return jsonify({'status': 'healthy'})
+    return jsonify({'status': 'healthy', 'message': 'v1'})
 
 @app.after_request
 def add_security_headers(response):
