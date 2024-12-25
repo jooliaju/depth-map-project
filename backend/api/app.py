@@ -8,16 +8,17 @@ from werkzeug.utils import secure_filename
 from scribble_process import create_masks_and_annotations, save_annotation_outputs
 from focus import test_focus
 from anisotropic import test_anisotropic
+from config import Config
 
 app = Flask(__name__)
+config = Config()
 
-# Configure CORS once
+# Configure CORS with proper origin
 CORS(app, resources={
     r"/*": {
-        "origins": "*",
+        "origins": ["https://your-vercel-app.vercel.app", "http://localhost:3000"],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type"],
-        "expose_headers": ["Content-Type"]
     }
 })
 
@@ -81,7 +82,7 @@ def save_annotations():
             'images': {
                 'annotations': {
                     'src': f'http://127.0.0.1:5000/outputs/{image_name}_annotations.png',
-                    'title': 'Annotations'
+                    'title': 'Input Annotations'
                 },
                 'withScribbles': {
                     'src': f'http://127.0.0.1:5000/outputs/{image_name}_with_scribbles.png',
@@ -184,23 +185,19 @@ def process_focus():
             'status': 'success',
             'images': {
                 'depthNorm': {
-                    'src': f'http://127.0.0.1:5000/focus_outputs/{image_name}_depth_norm.png',
+                    'src': get_image_url(f'{image_name}_depth_norm.png', 'focus_outputs'),
                     'title': 'Depth Normalized'
                 },
                 'mask': {
-                    'src': f'http://127.0.0.1:5000/focus_outputs/{image_name}_mask.png',
+                    'src': get_image_url(f'{image_name}_mask.png', 'focus_outputs'),
                     'title': 'Mask'
                 },
-                'maskBlur': {
-                    'src': f'http://127.0.0.1:5000/focus_outputs/{image_name}_mask_blur.png',
-                    'title': 'Mask Blur'
-                },
                 'bf': {
-                    'src': f'http://127.0.0.1:5000/focus_outputs/{image_name}_bf.png',
+                    'src': get_image_url(f'{image_name}_bf.png', 'focus_outputs'),
                     'title': 'Bilateral Filter'
                 },
                 'blended': {
-                    'src': f'http://127.0.0.1:5000/focus_outputs/{image_name}_blended.png',
+                    'src': get_image_url(f'{image_name}_blended.png', 'focus_outputs'),
                     'title': 'Final Result'
                 }
             }
@@ -221,7 +218,22 @@ def serve_focus_output(filename):
 def health_check():
     return jsonify({'status': 'healthy'})
 
+# Update image URLs in responses
+def get_image_url(filename, folder='outputs'):
+    base_url = os.getenv('BACKEND_URL', 'http://127.0.0.1:5000')
+    return f"{base_url}/{folder}/{filename}"
+
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
+
 if __name__ == '__main__':
-    # If your React app calls http://127.0.0.1:5000,
-    # make sure you use 127.0.0.1 here, or else switch React to localhost.
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    if config.ENV == 'production':
+        from waitress import serve
+        serve(app, host='0.0.0.0', port=5000)
+    else:
+        app.run(debug=True, host='127.0.0.1', port=5000)

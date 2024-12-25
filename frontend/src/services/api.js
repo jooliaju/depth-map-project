@@ -1,4 +1,6 @@
-const API_BASE_URL = "http://127.0.0.1:5000/api";
+import config from "../config";
+
+const API_BASE_URL = config.API_BASE_URL;
 
 export const uploadImage = async (file) => {
   const formData = new FormData();
