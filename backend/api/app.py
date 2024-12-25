@@ -291,15 +291,7 @@ def process_focus():
         print(f"Error in process_focus: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-@app.route('/outputs/<path:filename>')
-def serve_output(filename):
-    return send_from_directory(OUTPUT_FOLDER, filename)
-
-@app.route('/focus_outputs/<path:filename>')
-def serve_focus_output(filename):
-    return send_from_directory(FOCUS_OUTPUT_FOLDER, filename)
-
-@app.route('/health', methods=['GET'])
+@app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'healthy', 'message': 'v1'})
 
