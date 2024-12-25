@@ -6,8 +6,8 @@ class Config:
     DEV_BACKEND_URL = "http://127.0.0.1:5000"
     
     # Production settings
-    PROD_FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://depth-map-project.vercel.app')
-    PROD_BACKEND_URL = os.getenv('BACKEND_URL', 'https://depth-map-api.onrender.com')
+    PROD_FRONTEND_URL = os.getenv('FRONTEND_URL')
+    PROD_BACKEND_URL = os.getenv('BACKEND_URL')
     
     # Environment
     ENV = os.getenv('FLASK_ENV', 'development')
