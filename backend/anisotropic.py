@@ -30,16 +30,15 @@ def test_diffusion(rgb_img, scribbles, mask, ignore_mask, beta, iterations):
     """
     Solve Poisson's equation using the Jacobi method.
     """
-
-    # take scibbles shpae becasue its already 1 channel, unlike rgb_img
     h, w = scribbles.shape
-    # output is the same size as img
-    # fill output with 255 of size h,w
     depth_map = np.ones((h, w))*255
 
-    for _ in range(iterations):
-        if _ % 100 == 0:
-            print(f'Iteration {_}')
+    for iteration in range(iterations):
+        if iteration % 100 == 0:
+            print(f'Iteration {iteration}')
+            # Calculate progress percentage
+            progress = int((iteration / iterations) * 100)
+            yield (progress, None)  # Yield progress with no result
 
         new_depth_map = depth_map.copy()
 
@@ -92,10 +91,11 @@ def test_diffusion(rgb_img, scribbles, mask, ignore_mask, beta, iterations):
                                        left + w_right*right)/(w_top+w_bottom+w_left+w_right)
         depth_map = new_depth_map
 
-    return (depth_map)
+    # Return both 100% progress and the final result
+    yield (100, depth_map)
 
 
-def test_anisotropic(input, beta, iterations):
+def test_anisotropic(input, beta=0.1, iterations=3000, stream_progress=False):
     print("Starting diffusion process ")
     rgb_img = cv2.imread(f'./images/{input}.png')
     scribbles = cv2.imread(f'./outputs/{input}_annotations.png',
@@ -104,6 +104,19 @@ def test_anisotropic(input, beta, iterations):
                       cv2.IMREAD_GRAYSCALE)
     ignore_mask = cv2.imread(f'./outputs/{input}_ignore_mask.png',
                              cv2.IMREAD_GRAYSCALE)
-    result = test_diffusion(rgb_img,  scribbles, mask,
-                            ignore_mask, beta, iterations)
-    cv2.imwrite(f'./outputs/{input}_anisotropic.png', result)
+    
+    if stream_progress:
+        # Create generator
+        diffusion = test_diffusion(rgb_img, scribbles, mask,
+                                 ignore_mask, beta, iterations)
+        
+        # Process all updates
+        for progress, result in diffusion:
+            if result is not None:
+                # Save the final result
+                cv2.imwrite(f'./outputs/{input}_anisotropic.png', result)
+            yield progress
+    else:
+        result = test_diffusion(rgb_img, scribbles, mask,
+                              ignore_mask, beta, iterations)
+        cv2.imwrite(f'./outputs/{input}_anisotropic.png', result)

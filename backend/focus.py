@@ -49,88 +49,61 @@ def click_event(event, x, y, flags, param):
         print("Focus set to: ", focus_point)
 
 
-def test_focus(input, depth_range, kernel_size_gaus, kernel_size_bf, sigma_color, sigma_space, gaus_sigma):
+def test_focus(input, depth_range, kernel_size_gaus, kernel_size_bf, sigma_color, sigma_space, gaus_sigma, focus_point=None):
     """
-    This function tests the focusing and apeture algorithm
+    This function processes the focus effect using a provided focus point
     """
-    global rgb_copy, focus_point
-
-    print("Starting focus algorithm")
+    print("Starting focus algorithm with provided focus point:", focus_point)
 
     # Read the image and depth map
     rgb_img = cv2.imread(f"./images/{input}.png")
+    
+    # Convert focus point coordinates to integers
+    focus_x = int(round(focus_point['x']))
+    focus_y = int(round(focus_point['y']))
+    
+    print('Using focus point:', (focus_x, focus_y))
 
-    # Copy the rgb_img to another variable so that we can draw on it without modifying the original
-    rgb_copy = rgb_img.copy()
-
-    # Set the mouse callback function for the window
-    cv2.imshow("Select Focus", rgb_copy)
-    cv2.setMouseCallback("Select Focus", click_event)
-
-    while True:
-        key = cv2.waitKey(1) & 0xFF
-
-        # If the 'r' key is pressed, reset the image and the focus_set flag
-        if key == ord('r'):
-            rgb_copy = rgb_img.copy()
-            focus_set = False
-            cv2.imshow("Selet Focus", rgb_copy)
-
-        # If the 'esc' key is pressed, break from the loop
-        # If the 'enter' key is pressed, break from the loop
-        elif key == 27 or key == 13:
-            break
-    cv2.destroyAllWindows()
-
-    print('Final focus point: ', focus_point)
-
-    # create a mask with depth map
-    depth_map = cv2.imread(
-        f"./outputs/{input}_anisotropic.png")
+    # Create a mask with depth map
+    depth_map = cv2.imread(f"./outputs/{input}_anisotropic.png")
     norm_depth_map = cv2.normalize(
         depth_map, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-    # save normalized depth map
+    
+    # Save normalized depth map
     cv2.imwrite(f"./focus_outputs/{input}_depth_norm.png",
                 norm_depth_map*255)
 
-    focus_x = focus_point[0]
-    focus_y = focus_point[1]
-    # setting the focal point and depth range
+    # Setting the focal point and depth range
     focal_depth_value = norm_depth_map[focus_y, focus_x]
-    # Depth values within +/- depth_range from the focal point will remain in focus
-
+    
     # Create the new mask based on the depth range
     in_focus = (norm_depth_map >= (focal_depth_value - depth_range)) & \
         (norm_depth_map <= (focal_depth_value + depth_range))
 
-    # save the initial mask
+    # Save the initial mask
     cv2.imwrite(f"./focus_outputs/{input}_mask.png",
                 in_focus*255)
 
     depth_mask = cv2.imread(
         f"./focus_outputs/{input}_mask.png", cv2.IMREAD_GRAYSCALE)
-    # reshape depth mask to be 3 channels instead of 1 to work with gaussian filter
+    # Reshape depth mask to be 3 channels
     depth_mask = np.repeat(depth_mask[:, :, np.newaxis], 3, axis=2)
 
     gradient_mask = gaussian_filter(depth_mask, kernel_size_gaus, gaus_sigma)
-    # save gradient mask
+    # Save gradient mask
     cv2.imwrite(f"./focus_outputs/{input}_mask_blur.png", gradient_mask)
 
-    # read_gradient_mask = cv2.imread("./focus_outputs/{input}_mask.png")
-
-    # print("gradient mask shape: ", gradient_mask.shape)
     bf_img = bilateral_filter(rgb_img, kernel_size_bf,
-                              sigma_color, sigma_space)
+                            sigma_color, sigma_space)
     cv2.imwrite(f"./focus_outputs/{input}_bf.png", bf_img)
 
-    # turn gradient mask to single channel
+    # Turn gradient mask to single channel
     gradient_mask = cv2.cvtColor(gradient_mask, cv2.COLOR_BGR2GRAY)/255
 
-    # save gradient mask
+    # Save gradient mask
     cv2.imwrite(f"./focus_outputs/{input}_mask_blur.png", gradient_mask)
 
-    blended_img = blend_images(
-        rgb_img, bf_img, gradient_mask)
+    blended_img = blend_images(rgb_img, bf_img, gradient_mask)
 
-    # save blended image
+    # Save blended image
     cv2.imwrite(f"./focus_outputs/{input}_blended.png", blended_img)

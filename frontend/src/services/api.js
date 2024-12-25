@@ -8,9 +8,9 @@ export const uploadImage = async (file) => {
     const response = await fetch(`${API_BASE_URL}/upload-image`, {
       method: "POST",
       body: formData,
-      headers: {},
-      mode: "cors",
-      credentials: "include",
+      headers: {
+        // Remove Content-Type header to let browser set it with boundary for FormData
+      },
     });
 
     if (!response.ok) {
@@ -30,25 +30,20 @@ export const saveAnnotations = async (
   withScribbles
 ) => {
   try {
+    console.log("Saving annotations");
     const response = await fetch(`${API_BASE_URL}/save-annotations`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        imageName,
-        annotations,
-        withScribbles,
-      }),
-      mode: "cors",
-      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageName, annotations, withScribbles }),
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+    const data = await response.json();
 
-    return response.json();
+    console.log("Annotations saved");
+    return {
+      status: "success",
+      images: data.images,
+    };
   } catch (error) {
     console.error("Error saving annotations:", error);
     throw error;
@@ -70,21 +65,38 @@ export const processDepth = async (imageName, options = {}) => {
 };
 
 export const processFocus = async (imageName, focusPoint, options = {}) => {
-  const response = await fetch(`${API_BASE_URL}/process-focus`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      imageName,
-      focusPoint,
-      ...options,
-    }),
-  });
-  return response.json();
+  try {
+    const formData = new FormData();
+    formData.append("imageName", imageName);
+    formData.append("focusPoint", JSON.stringify(focusPoint));
+    formData.append("depthRange", options.depthRange || 0.1);
+    formData.append("kernelSizeGaus", options.kernelSizeGaus || 5);
+    formData.append("kernelSizeBf", options.kernelSizeBf || 5);
+    formData.append("sigmaColor", options.sigmaColor || 200);
+    formData.append("sigmaSpace", options.sigmaSpace || 200);
+    formData.append("gausSigma", options.gausSigma || 60);
+
+    const response = await fetch(`${API_BASE_URL}/process-focus`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error("Error processing focus:", error);
+    throw error;
+  }
 };
 
-export const processAnisotropic = async (imageName, options = {}) => {
+export const processAnisotropic = async (
+  imageName,
+  options = {},
+  onProgress
+) => {
   try {
     const response = await fetch(`${API_BASE_URL}/process-anisotropic`, {
       method: "POST",
@@ -96,15 +108,36 @@ export const processAnisotropic = async (imageName, options = {}) => {
         beta: options.beta || 0.1,
         iterations: options.iterations || 3000,
       }),
-      mode: "cors",
-      credentials: "include",
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let result;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      const events = decoder.decode(value).split("\n\n");
+      for (const event of events) {
+        if (event.trim()) {
+          const data = JSON.parse(event.replace("data: ", ""));
+          if (data.progress !== undefined) {
+            onProgress?.(data.progress);
+          } else if (data.status === "success") {
+            result = data;
+          } else if (data.status === "error") {
+            throw new Error(data.message);
+          }
+        }
+      }
     }
 
-    return response.json();
+    if (!result) {
+      throw new Error("No result received from server");
+    }
+
+    return result;
   } catch (error) {
     console.error("Error processing anisotropic:", error);
     throw error;
