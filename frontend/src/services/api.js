@@ -124,6 +124,10 @@ export const processAnisotropic = async (
       }),
     });
 
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let result;
@@ -135,13 +139,17 @@ export const processAnisotropic = async (
       const events = decoder.decode(value).split("\n\n");
       for (const event of events) {
         if (event.trim()) {
-          const data = JSON.parse(event.replace("data: ", ""));
-          if (data.progress !== undefined) {
-            onProgress?.(data.progress);
-          } else if (data.status === "success") {
-            result = data;
-          } else if (data.status === "error") {
-            throw new Error(data.message);
+          try {
+            const data = JSON.parse(event.replace("data: ", ""));
+            if (data.progress !== undefined) {
+              onProgress?.(data.progress);
+            } else if (data.status === "success") {
+              result = data;
+            } else if (data.status === "error") {
+              throw new Error(data.message);
+            }
+          } catch (parseError) {
+            console.error("Error parsing event:", parseError);
           }
         }
       }

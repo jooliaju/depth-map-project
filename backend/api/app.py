@@ -177,26 +177,28 @@ def process_anisotropic():
         
     try:
         data = request.json
-        image_data = data['imageData']  # Original image
-        annotations_data = data['annotations']  # Annotations image
-        mask_data = data['mask']  # Mask image
-        ignore_mask_data = data['ignoreMask']  # Ignore mask image
+        image_data = data['imageData']
+        annotations_data = data['annotations']
+        mask_data = data['mask']
+        ignore_mask_data = data['ignoreMask']
         beta = data.get('beta', 0.1)
         iterations = data.get('iterations', 3000)
         
         # Convert base64 to cv2 images
         image = decode_base64_image(image_data)
-        # Convert annotations to grayscale
         annotations = cv2.cvtColor(decode_base64_image(annotations_data), cv2.COLOR_BGR2GRAY)
         mask = cv2.cvtColor(decode_base64_image(mask_data), cv2.COLOR_BGR2GRAY)
         ignore_mask = cv2.cvtColor(decode_base64_image(ignore_mask_data), cv2.COLOR_BGR2GRAY)
         
         def generate():
             try:
+                last_progress = 0
+                result = None
+                
                 # Get the generator
                 anisotropic_gen = test_anisotropic(
                     image, 
-                    annotations,  # Now grayscale
+                    annotations,
                     mask,
                     ignore_mask,
                     beta, 
@@ -205,29 +207,41 @@ def process_anisotropic():
                 )
                 
                 # Stream progress updates
-                for progress, result in anisotropic_gen:
-                    if result is None:
+                for progress, current_result in anisotropic_gen:
+                    # Only send progress update if it's changed significantly
+                    if progress - last_progress >= 1 or progress >= 100:
+                        last_progress = progress
                         yield f"data: {json.dumps({'progress': progress})}\n\n"
-                    else:
-                        # Convert final result to base64
-                        result_base64 = encode_image_to_base64(result)
-                        final_result = {
-                            'status': 'success',
-                            'images': {
-                                'anisotropic': {
-                                    'src': f'data:image/png;base64,{result_base64}',
-                                    'title': 'Anisotropic Diffusion'
-                                }
+                    
+                    # Store the result
+                    if current_result is not None:
+                        result = current_result
+                
+                # Always send final result
+                if result is not None:
+                    result_base64 = encode_image_to_base64(result)
+                    final_result = {
+                        'status': 'success',
+                        'images': {
+                            'anisotropic': {
+                                'src': f'data:image/png;base64,{result_base64}',
+                                'title': 'Anisotropic Diffusion'
                             }
                         }
-                        yield f"data: {json.dumps(final_result)}\n\n"
+                    }
+                    yield f"data: {json.dumps(final_result)}\n\n"
+                else:
+                    raise ValueError("No result generated")
                         
             except Exception as e:
+                print(f"Error in generate: {str(e)}")
                 yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
         
         response = Response(generate(), mimetype='text/event-stream')
         response.headers['Cache-Control'] = 'no-cache'
         response.headers['Connection'] = 'keep-alive'
+        # Add headers for Railway deployment
+        response.headers['X-Accel-Buffering'] = 'no'
         return response
         
     except Exception as e:
