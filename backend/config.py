@@ -6,22 +6,15 @@ class Config:
     DEV_BACKEND_URL = "http://127.0.0.1:5000"
     
     # Production settings
-    PROD_FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://your-vercel-app.vercel.app')
-    PROD_BACKEND_URL = os.getenv('BACKEND_URL', 'https://your-backend-url.com')
+    PROD_FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://depth-map-project.vercel.app/')
+    PROD_BACKEND_URL = os.getenv('BACKEND_URL', 'https://depth-map-api.onrender.com')
     
     # Environment
-    ENV = os.getenv('FLASK_ENV', 'development')
+    ENV = os.getenv(key = 'FLASK_ENV', default = 'development')
     
     @property
     def FRONTEND_URL(self):
-        if self.ENV == 'development':
-            return self.DEV_FRONTEND_URL
-        # In production, allow both the Vercel domain and your custom domain
-        return [
-            self.PROD_FRONTEND_URL,
-            'https://your-vercel-app.vercel.app',
-            'https://yourdomain.com'
-        ]
+        return self.DEV_FRONTEND_URL if self.ENV == 'development' else self.PROD_FRONTEND_URL
     
     @property
     def BACKEND_URL(self):

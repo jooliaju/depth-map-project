@@ -16,7 +16,7 @@ config = Config()
 # Configure CORS with proper origin
 CORS(app, resources={
     r"/*": {
-        "origins": ["https://your-vercel-app.vercel.app", "http://localhost:3000"],
+        "origins": config.FRONTEND_URL,
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type"],
     }
@@ -31,6 +31,10 @@ FOCUS_OUTPUT_FOLDER = os.path.join(BACKEND_DIR, 'focus_outputs')
 # Create directories
 for folder in [UPLOAD_FOLDER, OUTPUT_FOLDER, FOCUS_OUTPUT_FOLDER]:
     os.makedirs(folder, exist_ok=True)
+
+# Helper function to get image URLs
+def get_image_url(filename, folder='outputs'):
+    return f"{config.BACKEND_URL}/{folder}/{filename}"
 
 # Routes
 @app.route('/api/upload-image', methods=['POST', 'OPTIONS'])
@@ -81,19 +85,19 @@ def save_annotations():
             'status': 'success',
             'images': {
                 'annotations': {
-                    'src': f'http://127.0.0.1:5000/outputs/{image_name}_annotations.png',
+                    'src': get_image_url(f'{image_name}_annotations.png'),
                     'title': 'Input Annotations'
                 },
                 'withScribbles': {
-                    'src': f'http://127.0.0.1:5000/outputs/{image_name}_with_scribbles.png',
+                    'src': get_image_url(f'{image_name}_with_scribbles.png'),
                     'title': 'With Scribbles'
                 },
                 'mask': {
-                    'src': f'http://127.0.0.1:5000/outputs/{image_name}_mask.png',
+                    'src': get_image_url(f'{image_name}_mask.png'),
                     'title': 'Mask'
                 },
                 'ignoreMask': {
-                    'src': f'http://127.0.0.1:5000/outputs/{image_name}_ignore_mask.png',
+                    'src': get_image_url(f'{image_name}_ignore_mask.png'),
                     'title': 'Ignore Mask'
                 }
             }
@@ -146,7 +150,7 @@ def process_anisotropic():
                     'status': 'success',
                     'images': {
                         'anisotropic': {
-                            'src': f'http://127.0.0.1:5000/outputs/{image_name}_anisotropic.png',
+                            'src': get_image_url(f'{image_name}_anisotropic.png'),
                             'title': 'Anisotropic Diffusion'
                         }
                     }
@@ -218,11 +222,6 @@ def serve_focus_output(filename):
 def health_check():
     return jsonify({'status': 'healthy'})
 
-# Update image URLs in responses
-def get_image_url(filename, folder='outputs'):
-    base_url = os.getenv('BACKEND_URL', 'http://127.0.0.1:5000')
-    return f"{base_url}/{folder}/{filename}"
-
 @app.after_request
 def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -233,6 +232,7 @@ def add_security_headers(response):
 
 if __name__ == '__main__':
     if config.ENV == 'production':
+        # good for concurrency
         from waitress import serve
         serve(app, host='0.0.0.0', port=5000)
     else:

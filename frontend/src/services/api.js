@@ -1,6 +1,6 @@
 import config from "../config";
 
-const API_BASE_URL = config.API_BASE_URL;
+const { API_BASE_URL } = config;
 
 export const uploadImage = async (file) => {
   const formData = new FormData();
@@ -10,9 +10,6 @@ export const uploadImage = async (file) => {
     const response = await fetch(`${API_BASE_URL}/upload-image`, {
       method: "POST",
       body: formData,
-      headers: {
-        // Remove Content-Type header to let browser set it with boundary for FormData
-      },
     });
 
     if (!response.ok) {
