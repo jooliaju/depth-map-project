@@ -13,14 +13,21 @@ from config import Config
 app = Flask(__name__)
 config = Config()
 
-# Configure CORS with proper origin
-CORS(app, resources={
-    r"/*": {
-        "origins": config.FRONTEND_URL,
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"],
-    }
-})
+# Use only the CORS middleware with simpler configuration
+CORS(app, 
+     origins=config.FRONTEND_URL,
+     supports_credentials=True,
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization"])
+
+# Remove the after_request CORS handler and keep only the security headers
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
 
 # Directory setup
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
