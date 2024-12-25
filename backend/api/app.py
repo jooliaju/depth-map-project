@@ -208,40 +208,52 @@ def process_anisotropic():
                 
                 # Stream progress updates
                 for progress, current_result in anisotropic_gen:
-                    # Only send progress update if it's changed significantly
-                    if progress - last_progress >= 1 or progress >= 100:
-                        last_progress = progress
-                        yield f"data: {json.dumps({'progress': progress})}\n\n"
-                    
-                    # Store the result
-                    if current_result is not None:
-                        result = current_result
+                    try:
+                        # Only send progress update if it's changed significantly
+                        if progress - last_progress >= 1 or progress >= 100:
+                            last_progress = progress
+                            progress_data = json.dumps({'progress': progress})
+                            yield f"data: {progress_data}\n\n"
+                        
+                        # Store the result
+                        if current_result is not None:
+                            result = current_result
+                    except Exception as e:
+                        print(f"Error in progress update: {str(e)}")
+                        continue
                 
                 # Always send final result
                 if result is not None:
-                    result_base64 = encode_image_to_base64(result)
-                    final_result = {
-                        'status': 'success',
-                        'images': {
-                            'anisotropic': {
-                                'src': f'data:image/png;base64,{result_base64}',
-                                'title': 'Anisotropic Diffusion'
+                    try:
+                        result_base64 = encode_image_to_base64(result)
+                        final_result = {
+                            'status': 'success',
+                            'images': {
+                                'anisotropic': {
+                                    'src': f'data:image/png;base64,{result_base64}',
+                                    'title': 'Anisotropic Diffusion'
+                                }
                             }
                         }
-                    }
-                    yield f"data: {json.dumps(final_result)}\n\n"
+                        yield f"data: {json.dumps(final_result)}\n\n"
+                    except Exception as e:
+                        print(f"Error encoding final result: {str(e)}")
+                        raise
                 else:
                     raise ValueError("No result generated")
                         
             except Exception as e:
                 print(f"Error in generate: {str(e)}")
-                yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
+                error_data = json.dumps({'status': 'error', 'message': str(e)})
+                yield f"data: {error_data}\n\n"
         
         response = Response(generate(), mimetype='text/event-stream')
-        response.headers['Cache-Control'] = 'no-cache'
-        response.headers['Connection'] = 'keep-alive'
-        # Add headers for Railway deployment
-        response.headers['X-Accel-Buffering'] = 'no'
+        response.headers.update({
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',
+            'Content-Type': 'text/event-stream'
+        })
         return response
         
     except Exception as e:

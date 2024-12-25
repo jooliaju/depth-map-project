@@ -130,17 +130,25 @@ export const processAnisotropic = async (
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = ""; // Buffer for incomplete chunks
     let result;
 
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
 
-      const events = decoder.decode(value).split("\n\n");
-      for (const event of events) {
+      // Append new chunk to buffer and split by double newline
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+
+      // Process all complete events
+      for (let i = 0; i < events.length - 1; i++) {
+        const event = events[i];
         if (event.trim()) {
           try {
-            const data = JSON.parse(event.replace("data: ", ""));
+            const dataStr = event.replace("data: ", "");
+            const data = JSON.parse(dataStr);
+
             if (data.progress !== undefined) {
               onProgress?.(data.progress);
             } else if (data.status === "success") {
@@ -149,9 +157,26 @@ export const processAnisotropic = async (
               throw new Error(data.message);
             }
           } catch (parseError) {
-            console.error("Error parsing event:", parseError);
+            console.warn("Error parsing event:", parseError);
+            // Continue processing other events
           }
         }
+      }
+
+      // Keep the last potentially incomplete event in the buffer
+      buffer = events[events.length - 1];
+    }
+
+    // Process any remaining complete event in the buffer
+    if (buffer.trim()) {
+      try {
+        const dataStr = buffer.replace("data: ", "");
+        const data = JSON.parse(dataStr);
+        if (data.status === "success") {
+          result = data;
+        }
+      } catch (parseError) {
+        console.warn("Error parsing final event:", parseError);
       }
     }
 
