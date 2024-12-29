@@ -52,17 +52,25 @@ def decode_base64_image(base64_string):
         if ',' in base64_string:
             base64_string = base64_string.split(',')[1]
         
+        # Add padding if needed
+        padding = len(base64_string) % 4
+        if padding:
+            base64_string += '=' * (4 - padding)
+            
         # Decode base64 string
         img_data = base64.b64decode(base64_string)
         nparr = np.frombuffer(img_data, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
         if img is None:
-            raise ValueError("Could not decode image data")
+            print("Failed to decode image: cv2.imdecode returned None")
+            print("Image data length:", len(img_data))
+            return None
             
         return img
     except Exception as e:
         print(f"Error decoding base64 image: {str(e)}")
+        print(f"First 100 chars of base64 string: {base64_string[:100]}")
         return None
 
 def encode_image_to_base64(image):
@@ -184,12 +192,35 @@ def process_anisotropic():
         beta = data.get('beta', 0.1)
         iterations = data.get('iterations', 3000)
         
-        # Convert base64 to cv2 images
+        # Convert base64 to cv2 images and ensure they're not None
         image = decode_base64_image(image_data)
-        annotations = cv2.cvtColor(decode_base64_image(annotations_data), cv2.COLOR_BGR2GRAY)
-        mask = cv2.cvtColor(decode_base64_image(mask_data), cv2.COLOR_BGR2GRAY)
-        ignore_mask = cv2.cvtColor(decode_base64_image(ignore_mask_data), cv2.COLOR_BGR2GRAY)
+        annotations = decode_base64_image(annotations_data)
+        mask = decode_base64_image(mask_data)
+        ignore_mask = decode_base64_image(ignore_mask_data)
         
+        # Add detailed error messages for each image
+        failed_images = []
+        if image is None:
+            failed_images.append("original image")
+        if annotations is None:
+            failed_images.append("annotations")
+        if mask is None:
+            failed_images.append("mask")
+        if ignore_mask is None:
+            failed_images.append("ignore mask")
+            
+        if failed_images:
+            error_msg = f"Failed to decode the following images: {', '.join(failed_images)}"
+            raise ValueError(error_msg)
+
+        # Convert annotations and masks to grayscale if they aren't already
+        if len(annotations.shape) > 2:
+            annotations = cv2.cvtColor(annotations, cv2.COLOR_BGR2GRAY)
+        if len(mask.shape) > 2:
+            mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+        if len(ignore_mask.shape) > 2:
+            ignore_mask = cv2.cvtColor(ignore_mask, cv2.COLOR_BGR2GRAY)
+
         def generate():
             try:
                 last_progress = 0

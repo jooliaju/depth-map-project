@@ -54,10 +54,3 @@ def base64_to_cv2(base64_string):
     img_data = base64.b64decode(base64_string.split(',')[1])
     nparr = np.frombuffer(img_data, np.uint8)
     return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-def save_annotation_outputs(output_dir, image_name, images):
-    """Save all annotation outputs"""
-    cv2.imwrite(f'{output_dir}/{image_name}_with_scribbles.png', images['with_scribbles'])
-    cv2.imwrite(f'{output_dir}/{image_name}_annotations.png', images['annotations'])
-    cv2.imwrite(f'{output_dir}/{image_name}_mask.png', images['mask'])
-    cv2.imwrite(f'{output_dir}/{image_name}_ignore_mask.png', images['ignore_mask']) 

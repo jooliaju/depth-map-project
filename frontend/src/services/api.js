@@ -115,12 +115,12 @@ export const processAnisotropic = async (
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        imageData,
+        imageData: imageData,
         annotations: options.annotations,
         mask: options.mask,
         ignoreMask: options.ignoreMask,
-        beta: options.beta || 0.1,
-        iterations: options.iterations || 3000,
+        beta: options.beta,
+        iterations: options.iterations,
       }),
     });
 

@@ -9,14 +9,7 @@ import { Box } from "@mui/material";
 
 const AnnotationCanvas = forwardRef(
   (
-    {
-      width = 800,
-      height = 600,
-      brushSize,
-      brushColor,
-      isIgnoreMode,
-      selectedImage,
-    },
+    { width = 800, height = 600, brushSize, brushColor, selectedImage },
     ref
   ) => {
     const imageCanvasRef = useRef(null); // For image + scribbles
@@ -224,6 +217,7 @@ const AnnotationCanvas = forwardRef(
                 maxWidth: "100%",
                 maxHeight: "100%",
                 objectFit: "contain",
+                cursor: "url(/SPNormal_Cursor.cur) 0 16, crosshair",
               }}
             />
           </Box>
